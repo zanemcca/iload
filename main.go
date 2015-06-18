@@ -39,7 +39,10 @@ func main() {
 	c := make(chan tutum.Event)
 	e := make(chan error)
 
-	log("About to start the tutum event handler")
+	// Launch the load balancer
+	reload();
+	log("Starting the tutum event handler")
+
 	go tutum.TutumEvents(c, e)
 
 	for {

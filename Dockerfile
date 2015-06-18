@@ -1,6 +1,25 @@
+FROM nginx 
 
-USE ubuntu:14.04
+MAINTAINER Zane McCaig
 
-RUN apt-get install golang mercurial
+# Update the repositories
+RUN apt-get update
 
-CMD cd /src && go run main.go
+# Install go , mercurial and git
+RUN apt-get install -y golang mercurial git
+
+# Copy all of our source files
+COPY . /src
+
+ENV GOPATH /src
+
+RUN cd /src && \
+  go get github.com/tutumcloud/go-tutum/tutum && \
+  go build -o iload && \
+  rm -r /etc/nginx && \
+  ln -s /src/nginx /etc/nginx && \
+  ls /etc/nginx
+
+EXPOSE 80
+
+CMD ls /etc/nginx && cd /src && ./iload  
