@@ -69,12 +69,15 @@ func setUpstream(s string) bool {
 }
 
 func buildUpstream() string {
+
+	// Grab the hosts 
 	hosts, err := net.LookupHost("web")
 	if err != nil {
 		log(err)
 		return upstream
 	}
 
+	// See if custom backend ports are being used
 	portStr := os.Getenv("BACKEND_PORTS")
 	var ports []string
 
@@ -84,12 +87,15 @@ func buildUpstream() string {
 		ports = append(ports, "80")
 	}
 
-	alg := os.Getenv("BALANCE")
-
 	var newUpstream = "upstream servers {"
+
+	// See if a custom load balancing algorithm was asked for
+	alg := os.Getenv("BALANCE")
 	if newVector("least_conn","ip_hash").contains(alg) {
 	  newUpstream += "\n\t" + alg + ";"
 	}
+
+	// Add all of the hosts found on all of the ports given
 	for _, host := range hosts {
 		for _, port := range ports {
 			newUpstream += "\n\tserver " + string(host) + ":" + strings.TrimSpace(port) + ";"
