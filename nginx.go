@@ -84,7 +84,12 @@ func buildUpstream() string {
 		ports = append(ports, "80")
 	}
 
-	var newUpstream = "upstream servers {\n\tip_hash;"
+	alg := os.Getenv("BALANCE")
+
+	var newUpstream = "upstream servers {"
+	if newVector("least_conn","ip_hash").contains(alg) {
+	  newUpstream += "\n\t" + alg + ";"
+	}
 	for _, host := range hosts {
 		for _, port := range ports {
 			newUpstream += "\n\tserver " + string(host) + ":" + strings.TrimSpace(port) + ";"
