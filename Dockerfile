@@ -18,8 +18,7 @@ RUN cd /src && \
   go get github.com/tutumcloud/go-tutum/tutum && \
   go build -o iload && \
   rm -r /etc/nginx && \
-  ln -s /src/nginx /etc/nginx && \
-  echo "expose_php = Off" >> /etc/php.ini
+  ln -s /src/nginx /etc/nginx
 
 EXPOSE 80
 
