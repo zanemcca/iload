@@ -74,10 +74,21 @@ func buildUpstream() string {
 		log(err)
 		return upstream
 	}
-	log(hosts)
+
+	portStr := os.Getenv("BACKEND_PORTS")
+	var ports []string
+
+	if len(portStr) > 0 {
+		ports = strings.Split(portStr, ",")
+	} else {
+		ports = append(ports, "80")
+	}
+
 	var newUpstream = "upstream servers {\n\tip_hash;"
 	for _, host := range hosts {
-	  newUpstream += "\n\tserver " + string(host) + ":3000;"
+		for _, port := range ports {
+			newUpstream += "\n\tserver " + string(host) + ":" + strings.TrimSpace(port) + ";"
+		}
 	}
 	newUpstream += "\n}"
 
