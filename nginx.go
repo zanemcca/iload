@@ -28,6 +28,7 @@ func getNginxPID() int {
 		pid, err := strconv.Atoi(str)
 		if err != nil {
 			log("Error: Could not convert " + str + " to an int")
+			os.Exit(2)
 			return -1
 		}
 		return pid
@@ -97,6 +98,8 @@ func setConf(c Conf) bool {
 
 	if success {
 		conf = c
+	} else {
+	  os.Exit(3)
 	}
 
 	return success
@@ -110,7 +113,7 @@ func buildConf(services []ServiceAddrs) Conf {
 
 	var newConf Conf
 	for _, service := range services {
-		newConf.proxy += "proxy_pass http://" + service.name
+		newConf.proxy += "proxy_pass http://" + service.name + ";"
 
 		var ustream = "upstream " + service.name + " {"
 
@@ -154,6 +157,7 @@ func nginxReload(services []ServiceAddrs) {
 					log("Error: Nginx has failed to reload!")
 					log(err)
 					log(stderr.String())
+					os.Exit(1)
 				}
 				//log(out.String())
 			}
@@ -173,10 +177,16 @@ func nginxReload(services []ServiceAddrs) {
 				log("Error: Nginx has failed to start!")
 				log(err)
 				log(stderr.String())
+				os.Exit(1)
 			}
-			//log(out.String())
+			go stopListener(start)
 		}
 	}
-	//TODO Add a listener on the output
-	//TODO Add a wait task on nginx start command so that we know when it exists
+}
+
+func stopListener(cmd *exec.Cmd) {
+	cmd.Wait()
+	log(cmd.Stdout)
+	log(cmd.Stderr)
+	os.Exit(1)
 }
