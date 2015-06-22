@@ -6,10 +6,19 @@ import "os"
 import "strconv"
 import "strings"
 import "bytes"
-import "net"
 
-var upstream string
+//import "net"
 
+type Conf struct {
+	server string
+	proxy  string
+}
+
+var conf Conf
+
+/*
+ * Get the Nginx PID from the /run/nginx.pid file
+ */
 func getNginxPID() int {
 	dat, err := ioutil.ReadFile("/run/nginx.pid")
 	if err != nil {
@@ -25,23 +34,26 @@ func getNginxPID() int {
 	}
 }
 
-var backup []byte
+/*
+ * Safely write the contents to the file
+ * A backup is created first and if the write fails then
+ * the backup is written back to the file
+ */
+func safeWrite(filename string, contents string) bool {
 
-func setUpstream(s string) bool {
-
-	const file = "/etc/nginx/servers.conf"
+	var backup []byte
 
 	// If the file exists read a backup then delete the file
-	if _, err := os.Stat(file); !os.IsNotExist(err) {
+	if _, err := os.Stat(filename); !os.IsNotExist(err) {
 
-		backup, err := ioutil.ReadFile(file)
+		backup, err := ioutil.ReadFile(filename)
 		_ = backup
 
 		if err != nil {
-			log("Warning: " + file + " could not be read")
+			log("Warning: " + filename + " could not be read")
 			log(err)
 		}
-		err = os.Remove(file)
+		err = os.Remove(filename)
 		if err != nil {
 			log("Error: Could not remove the old file")
 			log(err)
@@ -50,70 +62,86 @@ func setUpstream(s string) bool {
 	}
 
 	// Write the new contents to the file
-	err := ioutil.WriteFile(file, []byte(s), 0644)
+	err := ioutil.WriteFile(filename, []byte(contents), 0644)
 	if err != nil {
 		log("Error: Failed to write servers.conf")
 		log(err)
 		// Since we failed try to restore servers.conf
-		err = ioutil.WriteFile(file, backup, 0644)
+		err = ioutil.WriteFile(filename, backup, 0644)
 		if err != nil {
 			log("Error: Failed to restore servers.conf")
 			log(err)
 		}
 		return false
 	} else {
-		upstream = s
-		log("Success")
 		return true
 	}
 }
 
-func buildUpstream() string {
+/*
+ * Write the configurations to their files
+ * then save a local copy in conf
+ */
+func setConf(c Conf) bool {
 
-	// Grab the hosts 
-	hosts, err := net.LookupHost("web")
-	if err != nil {
-		log(err)
-		return upstream
+	const server = "/etc/nginx/servers.conf"
+	const proxy = "/etc/nginx/proxy.conf"
+
+	success := true
+	if c.server != conf.server {
+		success = safeWrite(server, c.server) && success
+	}
+	if c.proxy != conf.proxy {
+		success = safeWrite(proxy, c.proxy) && success
 	}
 
-	// See if custom backend ports are being used
-	portStr := os.Getenv("BACKEND_PORTS")
-	var ports []string
-
-	if len(portStr) > 0 {
-		ports = strings.Split(portStr, ",")
-	} else {
-		ports = append(ports, "80")
+	if success {
+		conf = c
 	}
 
-	var newUpstream = "upstream servers {"
-
-	// See if a custom load balancing algorithm was asked for
-	alg := os.Getenv("BALANCE")
-	if newVector("least_conn","ip_hash").contains(alg) {
-	  newUpstream += "\n\t" + alg + ";"
-	}
-
-	// Add all of the hosts found on all of the ports given
-	for _, host := range hosts {
-		for _, port := range ports {
-			newUpstream += "\n\tserver " + string(host) + ":" + strings.TrimSpace(port) + ";"
-		}
-	}
-	newUpstream += "\n}"
-
-	return newUpstream
+	return success
 }
 
-func reload() {
+/*
+ * Build the configurations using the service name and
+ * corresponding addresses
+ */
+func buildConf(services []ServiceAddrs) Conf {
 
-	newUpstream := buildUpstream()
-	log(newUpstream)
+	var newConf Conf
+	for _, service := range services {
+		newConf.proxy += "proxy_pass http://" + service.name
+
+		var ustream = "upstream " + service.name + " {"
+
+		// See if a custom load balancing algorithm was asked for
+		alg := os.Getenv("BALANCE")
+		if newVector("least_conn", "ip_hash").contains(alg) {
+			ustream += "\n\t" + alg + ";"
+		}
+
+		for _, adr := range service.addrs {
+
+			ustream += "\n\tserver " + adr + ";"
+		}
+		ustream += "\n}"
+		newConf.server += ustream + "\n"
+	}
+
+	return newConf
+}
+
+/*
+ * Generate configuration files and start/reload Nginx
+ */
+func nginxReload(services []ServiceAddrs) {
+
+	newConf := buildConf(services)
+	log(newConf)
 
 	if getNginxPID() > 0 {
-		if newUpstream != upstream {
-			if setUpstream(newUpstream) {
+		if newConf != conf {
+			if setConf(newConf) {
 				log("Reloading the load balancer")
 				reload := exec.Command("nginx", "-s", "reload")
 				var out bytes.Buffer
@@ -130,10 +158,10 @@ func reload() {
 				//log(out.String())
 			}
 		} else {
-			log("No need to relod because upstream is identical")
+			log("No need to relod because conf is identical")
 		}
 	} else {
-		if setUpstream(newUpstream) {
+		if setConf(newConf) {
 			start := exec.Command("nginx")
 			var out bytes.Buffer
 			var stderr bytes.Buffer
