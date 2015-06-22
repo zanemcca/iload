@@ -25,7 +25,7 @@ type ServiceAddrs struct {
 	addrs []string `json:"addrs"`
 }
 
-func start() {
+func reload() {
 
 	uri := strings.Split(os.Getenv("TUTUM_SERVICE_API_URI"), "/")
 
@@ -51,7 +51,7 @@ func start() {
 			var srv ServiceAddrs
 			srv.name = link.Name
 			for _, container := range containers.Objects {
-				if container.Service == link.To_service {
+				if container.State == "Running" && container.Service == link.To_service {
 					for _, port := range container.Container_ports {
 						port_num := strconv.Itoa(port.Inner_port)
 						address := container.Private_ip + ":" + port_num
@@ -68,38 +68,9 @@ func start() {
 	} else {
 	  log("Error: The service URI is not valid")
 	  log(uri)
+	  os.Exit(4)
 	}
 
-}
-
-func reload(e tutum.Event) {
-
-  /*
-	uri := strings.Split(e.Resource_uri, "/")
-
-	ln := len(uri)
-
-	if ln > 2 && uri[len(uri)-3] == "container" {
-		container, err := tutum.GetContainer(uri[len(uri)-2])
-
-		if err != nil {
-			log(err)
-		}
-
-		var addresses []string
-
-		for _, port := range container.Container_ports {
-			port_num := strconv.Itoa(port.Inner_port)
-			address := container.Private_ip + ":" + port_num
-			addresses = append(addresses, address)
-		}
-
-		log(addresses)
-
-		nginxReload(addresses)
-	}
-	*/
-	start()
 }
 
 func eventHandler(event tutum.Event) {
@@ -116,7 +87,7 @@ func eventHandler(event tutum.Event) {
 
 	if !notState.contains(event.State) {
 		if types.contains(event.Type) {
-			reload(event)
+			reload()
 		}
 	}
 }
@@ -132,7 +103,7 @@ func main() {
 	e := make(chan error)
 
 	// Launch the load balancer
-	start()
+	reload()
 	log("Starting the tutum event handler")
 
 	go tutum.TutumEvents(c, e)
