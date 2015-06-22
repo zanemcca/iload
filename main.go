@@ -3,11 +3,40 @@ package main
 import "github.com/tutumcloud/go-tutum/tutum"
 import _ "crypto/sha512"
 import "fmt"
+import "strings"
+import "encoding/json"
 
 //import "reflect"
 
 func log(obj interface{}) {
-	fmt.Printf("%+v\n", obj)
+	//fmt.Printf("%+v\n", obj)
+	str, _ := json.MarshalIndent(obj,"", "  ")
+	fmt.Printf(string(str))
+	fmt.Println()
+}
+
+func start() {
+	nginxReload()
+}
+
+func reload(e tutum.Event) {
+
+	uri := strings.Split(e.Resource_uri, "/")
+
+	ln := len(uri)
+
+	if ln > 2 && uri[len(uri) -3] == "container" {
+		container, err := tutum.GetContainer(uri[len(uri) -2])
+
+		if err != nil {
+			log(err)
+		}
+
+		log(container)
+
+		//TODO Read the new or terminated container and get their IP address
+		nginxReload()
+	}
 }
 
 func eventHandler(event tutum.Event) {
@@ -24,7 +53,7 @@ func eventHandler(event tutum.Event) {
 
 	if !notState.contains(event.State) {
 		if types.contains(event.Type) {
-			reload()
+			reload(event)
 		}
 	}
 }
@@ -40,7 +69,7 @@ func main() {
 	e := make(chan error)
 
 	// Launch the load balancer
-	reload();
+	start()
 	log("Starting the tutum event handler")
 
 	go tutum.TutumEvents(c, e)

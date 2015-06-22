@@ -106,7 +106,7 @@ func buildUpstream() string {
 	return newUpstream
 }
 
-func reload() {
+func nginxReload() {
 
 	newUpstream := buildUpstream()
 	log(newUpstream)
