@@ -1,3 +1,4 @@
 
 iload
+output
 nginx/servers.conf

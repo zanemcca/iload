@@ -1,0 +1,16 @@
+load:
+  image: 'tutum.co/zanemcca/iload:latest'
+  links:
+    - app 
+  ports:
+    - '80:80'
+  restart: always
+  roles:
+    - global
+  target_num_containers: 2
+
+app:
+  image: 'tutum/hello-world:latest'
+  deployment_strategy: high_availability
+  restart: always
+  target_num_containers: 3
