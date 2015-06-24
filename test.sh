@@ -16,6 +16,8 @@ echo $URL
 # Clean up function
 function quit {
   kill -15 $ZERO_PID
+  rm -f custom.yml
+  rm -f output
   # Clean up the stack
   tutum stack terminate $STACKNAME 
   exit $1
@@ -65,6 +67,7 @@ function zeroClean {
 #   hostnames are returned 
 # try n 
 # Where n is the number of active instances that are to be balanced across
+# n < 10
 function try {
 
   local prev=0
@@ -91,6 +94,19 @@ function try {
         break
       fi
     done
+
+    # Check that 10-$1 app instances are not being load balanced
+    if (($1 < 10));
+    then
+      for i in `seq $(($1+1)) 10`;
+      do
+        if grep -q "My hostname is .*-app-$i" output;
+        then
+          failed=$i
+          break
+        fi
+      done
+    fi
 
     # If the test failed then increase the delay and sleep
     if (($failed > 0));
@@ -120,8 +136,8 @@ function try {
 
 # Setup the image and login to ccounts/login/tutum
 tutum login -u $TUTUM_USER  -p $TUTUM_PASS -e zane@instanews.com 
-#docker build -t iload .
-#tutum image push iload
+docker build -t iload .
+tutum image push iload
 
 sed "s/lb/$LOADNAME/g" tutum.yml > custom.yml
 sed -i "s/app/$APPNAME/g" custom.yml
@@ -130,59 +146,63 @@ sed -i "s/username/$TUTUM_USER/g" custom.yml
 # Start the stack and wait for it to be running before continuing
 tutum stack up --sync -n $STACKNAME -f custom.yml
 
-#rm -f custom.yml
-
-# Start services
-#tutum service run -t 2 --name webTest tutum/hello-world
-#tutum service run --role global --link webTest:webTest --name iloadTest tutum.co/`echo $TUTUM_USER`/iload 
-
 echo "===> Testing that all 3 instances of the app are being used"
 try 3
+echo
+
+echo "===> Testing scaling up command on the app service"
+tutum service scale --sync $APPNAME 4 >> /dev/null
+try 4
+echo
+
+echo "===> Testing scaling down command on the app service"
+tutum service scale --sync $APPNAME 3 >> /dev/null 
+try 3
+echo
+
+echo "===> Testing stopping a container of the app service"
+tutum container stop --sync "$APPNAME-3" >> /dev/null
+try 2
+echo
+
+echo "===> Testing starting a container of the app service"
+tutum container start --sync "$APPNAME-3" >> /dev/null
+try 3 
+echo
+
+echo "===> Testing terminating a container of the app service"
+tutum container terminate --sync "$APPNAME-3" >> /dev/null
+try 2
+echo
 
 echo "===> Testing zero-downtime redeployment"
 
 tryZeroDown &
 ZERO_PID=$!
 echo "======> Load Balancer reload"
-tutum service redeploy --sync $LOADNAME 
+tutum service redeploy --sync $LOADNAME >> /dev/null 
 kill -15 $ZERO_PID 
 sleep 1
+echo
 
 tryZeroDown &
 ZERO_PID=$!
 echo "======> App service reload"
-tutum service redeploy --sync $APPNAME 
+tutum service redeploy --sync $APPNAME >> /dev/null
 kill -15 $ZERO_PID
 sleep 1
+echo
 
 tryZeroDown &
 ZERO_PID=$!
 echo "======> Reload the whole stack"
-tutum stack redeploy --sync $STACKNAME 
+tutum stack redeploy --sync $STACKNAME >> /dev/null 
 kill -15 $ZERO_PID
 sleep 1
+echo
 
-echo "===> Testing scaling up command on the app service"
-tutum service scale --sync $APPNAME 4
-try 4
-
-echo "===> Testing scaling down command on the app service"
-echo "========= TODO check for lack of existence of app-4 ==="
-tutum service scale --sync $APPNAME 3 
-try 3
-
-echo "===> Testing stopping a container of the app service"
-echo "========= TODO check for lack of existence of app-3 ==="
-tutum container stop --sync "$APPNAME-3"
-try 2
-
-echo "===> Testing starting a container of the app service"
-tutum container start --sync "$APPNAME-3"
-try 3 
-
-echo "===> Testing terminating a container of the app service"
-echo "========= TODO check for lack of existence of app-3 ==="
-tutum container terminate --sync "$APPNAME-3"
-try 2
+echo "===> Sanity check to make sure there are 2 containers remaining after the tests"
+try 2 
+echo
 
 quit
