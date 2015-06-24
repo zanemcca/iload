@@ -4,8 +4,10 @@ import "io/ioutil"
 import "os/exec"
 import "os"
 import "strconv"
+import "syscall"
 import "strings"
 import "bytes"
+import "fmt"
 
 //import "net"
 
@@ -32,6 +34,27 @@ func getNginxPID() int {
 			return -1
 		}
 		return pid
+	}
+}
+
+/*
+ * Check if nginx is running already
+ */
+func isNginxRunning() bool {
+	pid := getNginxPID()
+
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		log("Failed to fine process")
+		return false
+	} else {
+		err := process.Signal(syscall.Signal(0))
+		if err != nil {
+			fmt.Printf("Signal on pid %d returned: %v\n", pid, err)
+			return false
+		} else {
+			return true
+		}
 	}
 }
 
@@ -99,7 +122,7 @@ func setConf(c Conf) bool {
 	if success {
 		conf = c
 	} else {
-	  os.Exit(3)
+		os.Exit(3)
 	}
 
 	return success
@@ -142,7 +165,7 @@ func nginxReload(services []ServiceAddrs) {
 	newConf := buildConf(services)
 	log(newConf)
 
-	if getNginxPID() > 0 {
+	if isNginxRunning() {
 		if newConf != conf {
 			if setConf(newConf) {
 				log("Reloading the load balancer")
