@@ -14,6 +14,7 @@ import "fmt"
 type Conf struct {
 	server string
 	proxy  string
+	sslProxy  string
 }
 
 var conf Conf
@@ -110,6 +111,7 @@ func setConf(c Conf) bool {
 
 	const server = "/etc/nginx/servers.conf"
 	const proxy = "/etc/nginx/proxy.conf"
+	const sslProxy = "/etc/nginx/sslProxy.conf"
 
 	success := true
 	if c.server != conf.server {
@@ -117,6 +119,9 @@ func setConf(c Conf) bool {
 	}
 	if c.proxy != conf.proxy {
 		success = safeWrite(proxy, c.proxy) && success
+	}
+	if c.sslProxy != conf.sslProxy {
+		success = safeWrite(sslProxy, c.sslProxy) && success
 	}
 
 	if success {
@@ -137,21 +142,31 @@ func buildConf(services []ServiceAddrs) Conf {
 	var newConf Conf
 	for _, service := range services {
 		newConf.proxy += "proxy_pass http://" + service.name + ";"
+		newConf.sslProxy += "proxy_pass https://ssl_" + service.name + ";"
 
 		var ustream = "upstream " + service.name + " {"
+		var sslUstream = "upstream ssl_" + service.name + " {"
 
 		// See if a custom load balancing algorithm was asked for
 		alg := os.Getenv("BALANCE")
 		if newVector("least_conn", "ip_hash").contains(alg) {
 			ustream += "\n\t" + alg + ";"
+			sslUstream += "\n\t" + alg + ";"
 		}
 
 		for _, adr := range service.addrs {
 
-			ustream += "\n\tserver " + adr + ";"
+			// Forward all addresses that contain 443 to ssl 
+			// and everything else to normal
+			if strings.Contains(adr, "443") {
+				sslUstream += "\n\tserver " + adr + ";"
+			} else {
+				ustream += "\n\tserver " + adr + ";"
+			}
 		}
 		ustream += "\n}"
-		newConf.server += ustream + "\n"
+		sslUstream += "\n}"
+		newConf.server += ustream + "\n" + sslUstream + "\n"
 	}
 
 	return newConf
