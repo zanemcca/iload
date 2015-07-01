@@ -201,6 +201,8 @@ kill -15 $ZERO_PID
 sleep 1
 echo
 
+#TODO Add testcases for the BACKEND_PORT(S) envvars
+
 echo "===> Sanity check to make sure there are 2 containers remaining after the tests"
 try 2 
 echo
