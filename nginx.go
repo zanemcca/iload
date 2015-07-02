@@ -1,6 +1,8 @@
 package main
 
 import "io/ioutil"
+import "io"
+import "bufio"
 import "os/exec"
 import "os"
 import "strconv"
@@ -31,7 +33,7 @@ func getNginxPID() int {
 		pid, err := strconv.Atoi(str)
 		if err != nil {
 			log("Error: Could not convert " + str + " to an int")
-			os.Exit(2)
+			shutdown(2)
 			return -1
 		}
 		return pid
@@ -111,27 +113,33 @@ func safeWrite(filename string, contents string) bool {
  * Write the configurations to their files
  * then save a local copy in conf
  */
-func setConf(c Conf) bool {
+func setConf(c Conf) int {
 
 	const server = "/etc/nginx/servers.conf"
 	const proxy = "/etc/nginx/proxy.conf"
 	const sslProxy = "/etc/nginx/sslProxy.conf"
 
-	success := true
+	success := 0
 	if c.server != conf.server {
-		success = safeWrite(server, c.server) && success
+		if safeWrite(server, c.server) {
+			success++
+		}
 	}
 	if c.proxy != conf.proxy {
-		success = safeWrite(proxy, c.proxy) && success
+		if safeWrite(proxy, c.proxy) {
+			success++
+		}
 	}
 	if c.sslProxy != conf.sslProxy {
-		success = safeWrite(sslProxy, c.sslProxy) && success
+		if safeWrite(sslProxy, c.sslProxy) {
+			success++
+		}
 	}
 
-	if success {
+	if success > 0 {
 		conf = c
 	} else {
-		os.Exit(3)
+		shutdown(3)
 	}
 
 	return success
@@ -189,11 +197,11 @@ func buildConf(services []ServiceAddrs) Conf {
 func nginxReload(services []ServiceAddrs) {
 
 	newConf := buildConf(services)
-	log(newConf)
 
 	if isNginxRunning() {
 		if newConf != conf {
-			if setConf(newConf) {
+			log(newConf)
+			if setConf(newConf) > 0 {
 				log("Reloading the load balancer")
 				reload := exec.Command("nginx", "-s", "reload")
 				var out bytes.Buffer
@@ -206,36 +214,85 @@ func nginxReload(services []ServiceAddrs) {
 					log("Error: Nginx has failed to reload!")
 					log(err)
 					log(stderr.String())
-					os.Exit(1)
+					shutdown(1)
 				}
-				//log(out.String())
+				log(out.String())
+			} else {
+				log("Failed to update the configuration")
 			}
 		} else {
 			log("No need to relod because conf is identical")
 		}
 	} else {
-		if setConf(newConf) {
+		log(newConf)
+		if setConf(newConf) > 0 {
 			start := exec.Command("nginx")
-			var out bytes.Buffer
-			var stderr bytes.Buffer
-			start.Stdout = &out
-			start.Stderr = &stderr
+			stdout, err := start.StdoutPipe()
+			if err != nil {
+				log(err)
+			} else {
+				go pipeOutput(stdout)
+			}
+			stderr, err := start.StderrPipe()
+			if err != nil {
+				log(err)
+			} else {
+				go pipeOutput(stderr)
+			}
+
 			log("Starting the load balancer")
-			err := start.Start()
+			err = start.Start()
 			if err != nil {
 				log("Error: Nginx has failed to start!")
 				log(err)
-				log(stderr.String())
-				os.Exit(1)
+				//log(stderr.String())
+				shutdown(1)
 			}
-			go stopListener(start)
+			//go stopListener(start)
+		} else {
+			log("Failed to update the configuration")
 		}
 	}
 }
 
+// Make sure you call this with a go routine
+func pipeOutput(reader io.Reader) {
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		log(scanner.Text())
+	}
+	if err := scanner.Err(); err != nil {
+		log("Error piping to output!")
+		log(err)
+	}
+}
+
+func shutdown(code int) {
+	log("Terminating the instance with code: " + strconv.Itoa(code))
+	if isNginxRunning() {
+		log("Shutting down the load balancer")
+		stop := exec.Command("nginx", "-s", "stop")
+		var out bytes.Buffer
+		var stderr bytes.Buffer
+		stop.Stdout = &out
+		stop.Stderr = &stderr
+
+		err := stop.Run()
+		if err != nil {
+			log("Error: Nginx has failed to stop!")
+			log(err)
+			log(stderr.String())
+		}
+		log(out.String())
+	}
+	os.Exit(code)
+}
+
+/*
 func stopListener(cmd *exec.Cmd) {
 	cmd.Wait()
 	log(cmd.Stdout)
 	log(cmd.Stderr)
-	os.Exit(1)
+	shutdown(0)
 }
+*/
