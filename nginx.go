@@ -44,18 +44,22 @@ func getNginxPID() int {
 func isNginxRunning() bool {
 	pid := getNginxPID()
 
-	process, err := os.FindProcess(pid)
-	if err != nil {
-		log("Failed to fine process")
-		return false
-	} else {
-		err := process.Signal(syscall.Signal(0))
+	if pid > 0 {
+		process, err := os.FindProcess(pid)
 		if err != nil {
-			fmt.Printf("Signal on pid %d returned: %v\n", pid, err)
+			log("Failed to fine process")
 			return false
 		} else {
-			return true
+			err := process.Signal(syscall.Signal(0))
+			if err != nil {
+				fmt.Printf("Signal on pid %d returned: %v\n", pid, err)
+				return false
+			} else {
+				return true
+			}
 		}
+	} else {
+		return false
 	}
 }
 
