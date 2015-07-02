@@ -12,9 +12,9 @@ import "fmt"
 //import "net"
 
 type Conf struct {
-	server string
-	proxy  string
-	sslProxy  string
+	server   string
+	proxy    string
+	sslProxy string
 }
 
 var conf Conf
@@ -144,8 +144,8 @@ func buildConf(services []ServiceAddrs) Conf {
 		newConf.proxy += "proxy_pass http://" + service.name + ";"
 		newConf.sslProxy += "proxy_pass https://ssl_" + service.name + ";"
 
-		var ustream = "upstream " + service.name + " {"
-		var sslUstream = "upstream ssl_" + service.name + " {"
+		var ustream = ""
+		var sslUstream = ""
 
 		// See if a custom load balancing algorithm was asked for
 		alg := os.Getenv("BALANCE")
@@ -154,19 +154,26 @@ func buildConf(services []ServiceAddrs) Conf {
 			sslUstream += "\n\t" + alg + ";"
 		}
 
+		sslOn := false
 		for _, adr := range service.addrs {
 
-			// Forward all addresses that contain 443 to ssl 
+			// Forward all addresses that contain 443 to ssl
 			// and everything else to normal
 			if strings.Contains(adr, "443") {
 				sslUstream += "\n\tserver " + adr + ";"
+				sslOn = true
 			} else {
 				ustream += "\n\tserver " + adr + ";"
 			}
 		}
-		ustream += "\n}"
-		sslUstream += "\n}"
-		newConf.server += ustream + "\n" + sslUstream + "\n"
+
+		newConf.server += "upstream " + service.name + " {" + ustream + "\n}\n"
+		if sslOn == true {
+			newConf.server += "upstream ssl_" + service.name + " {" + sslUstream + "\n}\n"
+		} else {
+			//If ssl is not on then terminate the ssl and forward to regular http
+			newConf.server += "upstream ssl_" + service.name + " {" + ustream + "\n}\n"
+		}
 	}
 
 	return newConf
