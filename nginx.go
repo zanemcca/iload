@@ -144,23 +144,23 @@ func setConf(c Conf) bool {
 func buildConf(services []ServiceAddrs) Conf {
 
 	var newConf Conf
+
+	newConf.proxy += "proxy_pass http://normal;\n"
+	newConf.sslProxy += "proxy_pass https://ssl;\n"
+
+	var ustream = ""
+	var sslUstream = ""
+
+	// See if a custom load balancing algorithm was asked for
+	alg := os.Getenv("BALANCE")
+	if newVector("least_conn", "ip_hash").contains(alg) {
+		ustream += "\n\t" + alg + ";"
+		sslUstream += "\n\t" + alg + ";"
+	}
+	sslOn := false
+
 	for _, service := range services {
-		newConf.proxy += "proxy_pass http://" + service.name + ";"
-		newConf.sslProxy += "proxy_pass https://ssl_" + service.name + ";"
-
-		var ustream = ""
-		var sslUstream = ""
-
-		// See if a custom load balancing algorithm was asked for
-		alg := os.Getenv("BALANCE")
-		if newVector("least_conn", "ip_hash").contains(alg) {
-			ustream += "\n\t" + alg + ";"
-			sslUstream += "\n\t" + alg + ";"
-		}
-
-		sslOn := false
 		for _, adr := range service.addrs {
-
 			// Forward all addresses that contain 443 to ssl
 			// and everything else to normal
 			if strings.Contains(adr, "443") {
@@ -170,14 +170,14 @@ func buildConf(services []ServiceAddrs) Conf {
 				ustream += "\n\tserver " + adr + ";"
 			}
 		}
+	}
 
-		newConf.server += "upstream " + service.name + " {" + ustream + "\n}\n"
-		if sslOn == true {
-			newConf.server += "upstream ssl_" + service.name + " {" + sslUstream + "\n}\n"
-		} else {
-			//If ssl is not on then terminate the ssl and forward to regular http
-			newConf.server += "upstream ssl_" + service.name + " {" + ustream + "\n}\n"
-		}
+	newConf.server += "upstream normal {" + ustream + "\n}\n"
+	if sslOn == true {
+		newConf.server += "upstream ssl {" + sslUstream + "\n}\n"
+	} else {
+		//If ssl is not on then terminate the ssl and forward to regular http
+		newConf.server += "upstream ssl {" + ustream + "\n}\n"
 	}
 
 	return newConf
