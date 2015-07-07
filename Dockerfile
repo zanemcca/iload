@@ -22,4 +22,6 @@ RUN cd /src && \
 
 EXPOSE 80
 
+RUN go version
+
 CMD ./iload  

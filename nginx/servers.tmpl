@@ -1,0 +1,29 @@
+{{range .Servers}}
+{{range ..Services}}upstream {{..Name}} {
+	{{range ..Hosts}}server {{.}};
+	{{end}}
+{{end}}
+server {
+	listen {{..FrontendPort}};
+	server_name {{..VirtualHost}};
+
+	{{if (eq ..FrontendPort 443)}}
+	ssl_certificate     /etc/nginx/cert.crt;
+	ssl_certificate_key /etc/nginx/cert.key;
+
+	ssl on;
+	ssl_session_cache builtin:1000 shared:SSL:10m;
+	ssl_protocols     TLSv1 TLSv1.1 TLSv1.2;
+	ssl_ciphers HIGH:!aNULL:!eNULL:!EXPORT:!CAMELLIA:!DES:!MD5:!PSK:!RC4;
+	ssl_prefer_server_ciphers on;
+	{{end}}
+	{{range ..Services}}location {{..Location}} {
+		proxy_pass http://{{..Name}};
+
+		# Set headers
+		proxy_set_header Host $host;
+		proxy_set_header X-Real_IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+	}{{end}}
+}{{end}}

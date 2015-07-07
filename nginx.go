@@ -10,15 +10,18 @@ import "syscall"
 import "strings"
 import "bytes"
 import "fmt"
+import "text/template"
+import "reflect"
 
 //import "net"
 
+/*
 type Conf struct {
 	server   string
 	proxy    string
 	sslProxy string
 }
-
+*/
 var conf Conf
 
 /*
@@ -109,99 +112,56 @@ func safeWrite(filename string, contents string) bool {
 	}
 }
 
+func readTemplate() string {
+	backup, err := ioutil.ReadFile("nginx/servers.tmpl")
+	_ = backup
+
+	if err != nil {
+		fmt.Println("Warning: servers.tmpl could not be read")
+		panic(err)
+	}
+
+	return string(backup)
+}
+
 /*
  * Write the configurations to their files
  * then save a local copy in conf
  */
-func setConf(c Conf) int {
+func setConf(c Conf) bool {
 
-	const server = "/etc/nginx/servers.conf"
-	const proxy = "/etc/nginx/proxy.conf"
-	const sslProxy = "/etc/nginx/sslProxy.conf"
-
-	success := 0
-	if c.server != conf.server {
-		if safeWrite(server, c.server) {
-			success++
-		}
-	}
-	if c.proxy != conf.proxy {
-		if safeWrite(proxy, c.proxy) {
-			success++
-		}
-	}
-	if c.sslProxy != conf.sslProxy {
-		if safeWrite(sslProxy, c.sslProxy) {
-			success++
-		}
+	tmpl, err := template.New("servers").Parse(readTemplate())
+	if err != nil {
+		log(err)
+		return false
 	}
 
-	if success > 0 {
+	var b bytes.Buffer
+	err = tmpl.Execute(&b, c)
+
+	if err != nil {
+		log(err)
+		return false
+	}
+
+	s:= b.String()
+	if safeWrite("nginx/servers.conf",s) {
+		log(s)
 		conf = c
-	} else {
-		shutdown(3)
 	}
 
-	return success
-}
-
-/*
- * Build the configurations using the service name and
- * corresponding addresses
- */
-func buildConf(services []ServiceAddrs) Conf {
-
-	var newConf Conf
-
-	newConf.proxy += "proxy_pass http://normal;\n"
-	newConf.sslProxy += "proxy_pass https://ssl;\n"
-
-	var ustream = ""
-	var sslUstream = ""
-
-	// See if a custom load balancing algorithm was asked for
-	alg := os.Getenv("BALANCE")
-	if newVector("least_conn", "ip_hash").contains(alg) {
-		ustream += "\n\t" + alg + ";"
-		sslUstream += "\n\t" + alg + ";"
-	}
-	sslOn := false
-
-	for _, service := range services {
-		for _, adr := range service.addrs {
-			// Forward all addresses that contain 443 to ssl
-			// and everything else to normal
-			if strings.Contains(adr, "443") {
-				sslUstream += "\n\tserver " + adr + ";"
-				sslOn = true
-			} else {
-				ustream += "\n\tserver " + adr + ";"
-			}
-		}
-	}
-
-	newConf.server += "upstream normal {" + ustream + "\n}\n"
-	if sslOn == true {
-		newConf.server += "upstream ssl {" + sslUstream + "\n}\n"
-	} else {
-		//If ssl is not on then terminate the ssl and forward to regular http
-		newConf.server += "upstream ssl {" + ustream + "\n}\n"
-	}
-
-	return newConf
+	return true
 }
 
 /*
  * Generate configuration files and start/reload Nginx
  */
-func nginxReload(services []ServiceAddrs) {
-
-	newConf := buildConf(services)
+func nginxReload(newConf Conf) {
 
 	if isNginxRunning() {
-		if newConf != conf {
+		if ! reflect.DeepEqual(newConf,conf) {
 			log(newConf)
-			if setConf(newConf) > 0 {
+			if setConf(newConf) {
 				log("Reloading the load balancer")
 				reload := exec.Command("nginx", "-s", "reload")
 				var out bytes.Buffer
@@ -225,7 +185,7 @@ func nginxReload(services []ServiceAddrs) {
 		}
 	} else {
 		log(newConf)
-		if setConf(newConf) > 0 {
+		if setConf(newConf) {
 			start := exec.Command("nginx")
 			stdout, err := start.StdoutPipe()
 			if err != nil {
@@ -255,6 +215,10 @@ func nginxReload(services []ServiceAddrs) {
 	}
 }
 
+/*
+ * This function will continuously scan and pipe
+ * the input to stdout
+ */
 // Make sure you call this with a go routine
 func pipeOutput(reader io.Reader) {
 	scanner := bufio.NewScanner(reader)
