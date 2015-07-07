@@ -28,12 +28,6 @@ func randName() string {
 	return string(b)
 }
 
-type ServiceAddrs struct {
-	name         string   `json:"name"`
-	virtual_host string   `json:"vitrual_host"`
-	addrs        []string `json:"addrs"`
-}
-
 type PortMap struct {
 	Exposed int
 	Local   []int
@@ -43,6 +37,7 @@ type Service struct {
 	Name     string
 	Location string
 	Hosts    []string
+	Auth     bool
 }
 
 type Server struct {
@@ -147,6 +142,7 @@ func reload() {
 			var maps []PortMap
 			location := "/"
 			vhost := "localhost"
+			auth := false
 
 			for _, container := range containers.Objects {
 				if container.State == "Running" && container.Service == link.To_service {
@@ -195,6 +191,17 @@ func reload() {
 								location = pair.Value
 							} else if pair.Key == "VIRTUAL_HOST" {
 								vhost = pair.Value
+							} else if pair.Key == "HTTP_AUTH" {
+								auth = true
+								/*
+									value := strings.Split(pair.Value, ":")
+										if len(value) == 2 {
+											auth = true
+										} else {
+											log("Warning: The http authentication is no good")
+											log("	It is expected to be of the form 'username:pasword'")
+										}
+								*/
 							}
 						}
 					}
@@ -210,7 +217,7 @@ func reload() {
 							}
 							j := conf.Servers[i].findService(location)
 							if j < 0 {
-								service := Service{Location: location, Name:  link.Name + randName()}
+								service := Service{Location: location, Auth: auth, Name: link.Name + randName()}
 								conf.Servers[i].addService(service)
 								j = conf.Servers[i].findService(location)
 							}
@@ -231,7 +238,7 @@ func reload() {
 
 						j := conf.Servers[i].findService(location)
 						if j < 0 {
-							service := Service{Location: location, Name: link.Name + randName()}
+							service := Service{Location: location, Auth: auth, Name: link.Name + randName()}
 							conf.Servers[i].addService(service)
 							j = conf.Servers[i].findService(location)
 						}
