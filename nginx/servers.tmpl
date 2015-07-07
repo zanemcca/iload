@@ -1,8 +1,7 @@
 {{range .Servers}}
 {{range ..Services}}upstream {{..Name}} {
 	{{range ..Hosts}}server {{.}};
-	{{end}}
-{{end}}
+{{end}}}{{end}}
 server {
 	listen {{..FrontendPort}};
 	server_name {{..VirtualHost}};
