@@ -223,7 +223,7 @@ func nginxReload(newConf Conf) {
 func pipeOutput(reader io.Reader) {
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
-		log(scanner.Text())
+		log("Nginx: " + scanner.Text())
 	}
 	if err := scanner.Err(); err != nil {
 		log("Error piping to output!")
