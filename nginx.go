@@ -117,8 +117,9 @@ func readTemplate() string {
 	_ = backup
 
 	if err != nil {
-		fmt.Println("Warning: servers.tmpl could not be read")
-		panic(err)
+		log("Warning: servers.tmpl could not be read")
+		log(err)
+		return ""
 	}
 
 	return string(backup)
@@ -130,8 +131,15 @@ func readTemplate() string {
  */
 func setConf(c Conf) bool {
 
+	tmplString := readTemplate()
+	if tmplString == "" {
+		log("Failed to read template")
+		return false
+	}
+
 	tmpl, err := template.New("servers").Parse(readTemplate())
 	if err != nil {
+		log("Error: Parsing template has failed!")
 		log(err)
 		return false
 	}
@@ -140,12 +148,13 @@ func setConf(c Conf) bool {
 	err = tmpl.Execute(&b, c)
 
 	if err != nil {
+		log("Error: Executing template has failed!")
 		log(err)
 		return false
 	}
 
-	s:= b.String()
-	if safeWrite("nginx/servers.conf",s) {
+	s := b.String()
+	if safeWrite("nginx/servers.conf", s) {
 		log(s)
 		conf = c
 	}
@@ -159,8 +168,7 @@ func setConf(c Conf) bool {
 func nginxReload(newConf Conf) {
 
 	if isNginxRunning() {
-		if ! reflect.DeepEqual(newConf,conf) {
-			log(newConf)
+		if !reflect.DeepEqual(newConf, conf) {
 			if setConf(newConf) {
 				log("Reloading the load balancer")
 				reload := exec.Command("nginx", "-s", "reload")
@@ -184,7 +192,6 @@ func nginxReload(newConf Conf) {
 			log("No need to relod because conf is identical")
 		}
 	} else {
-		log(newConf)
 		if setConf(newConf) {
 			start := exec.Command("nginx")
 			stdout, err := start.StdoutPipe()
