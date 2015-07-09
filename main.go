@@ -303,10 +303,9 @@ func main() {
 		case event := <-c:
 			eventHandler(event)
 		case err := <-e:
-			if err != nil {
-				log("Error:")
-				log(err)
-			}
+			log("Error:")
+			log(err)
+			shutdown(-6)
 		}
 	}
 }
