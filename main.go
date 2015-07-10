@@ -126,6 +126,7 @@ func reload() {
 
 	if ln > 2 && uri[len(uri)-3] == "service" {
 
+		log("Info: The service URI is valid. Attempting to retrieve the service")
 		service, err := tutum.GetService(uri[len(uri)-2])
 
 		if err != nil {
@@ -142,6 +143,7 @@ func reload() {
 
 		conf := Conf{}
 
+		log("Info: About to configure services")
 		for _, link := range service.Linked_to_service {
 			first := true
 			var maps []PortMap
@@ -149,12 +151,14 @@ func reload() {
 			vhost := "localhost"
 			auth := false
 
+			log("Info: Looking for containers belonging to service " + link.Name)
 			for _, container := range containers.Objects {
 				if container.State == "Running" && container.Service == link.To_service {
 
 					//Some stuff only has to be run once per container of each service
 					if first {
 						first = false
+						log("Info: First container belonging to service " + link.Name)
 
 						//The container returned by getContainers skips the env vars
 						// so I am trying to re-retrieve the container individually
@@ -213,6 +217,7 @@ func reload() {
 					}
 
 					if len(maps) > 0 {
+						log("Info: Loading custom ports for container " + container.Name)
 						//If custom backend ports were requested then load them
 						for _, mMap := range maps {
 							i := conf.findServer(mMap.Exposed, vhost)
@@ -235,6 +240,7 @@ func reload() {
 						}
 					} else {
 
+						log("Info: Loading all exposed ports to 80")
 						i := conf.findServer(80, vhost)
 						if i < 0 {
 							server := Server{FrontendPort: 80, VirtualHost: vhost}
