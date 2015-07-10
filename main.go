@@ -118,7 +118,9 @@ func (c *Conf) addServer(server Server) {
 
 func reload() {
 
-	uri := strings.Split(os.Getenv("TUTUM_SERVICE_API_URI"), "/")
+	serviceApi := os.Getenv("TUTUM_SERVICE_API_URI")
+
+	uri := strings.Split(serviceApi, "/")
 
 	ln := len(uri)
 
@@ -148,7 +150,6 @@ func reload() {
 			auth := false
 
 			for _, container := range containers.Objects {
-				//log(container)
 				if container.State == "Running" && container.Service == link.To_service {
 
 					//Some stuff only has to be run once per container of each service
@@ -258,6 +259,7 @@ func reload() {
 			}
 		}
 
+		log("Info: Configuration is completed. Reloading Nginx")
 		nginxReload(conf)
 
 	} else {
@@ -283,8 +285,11 @@ func eventHandler(event tutum.Event) {
 	//types := newVector("container", "service")
 	types := newVector("container")
 
+	log("Info: Vectors created!")
 	if !notState.contains(event.State) {
+		log("Info: Valid State!")
 		if types.contains(event.Type) {
+			log("Info: Valid Type! Reloading!")
 			reload()
 		}
 	}
