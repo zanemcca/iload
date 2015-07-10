@@ -134,6 +134,7 @@ func reload() {
 			log(err)
 		}
 
+		log("Info: Attempting to retrieve the containers")
 		containers, err := tutum.ListContainers()
 
 		if err != nil {
@@ -141,9 +142,9 @@ func reload() {
 			log(err)
 		}
 
+		log("Info: About to configure services")
 		conf := Conf{}
 
-		log("Info: About to configure services")
 		for _, link := range service.Linked_to_service {
 			first := true
 			var maps []PortMap
