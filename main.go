@@ -9,6 +9,7 @@ import "os"
 import "math/rand"
 
 //import "encoding/json"
+
 func log(obj interface{}) {
 	fmt.Printf("%+v\n", obj)
 	/*
@@ -126,12 +127,14 @@ func reload() {
 		service, err := tutum.GetService(uri[len(uri)-2])
 
 		if err != nil {
+			log("Error: Failed to retrieve the service")
 			log(err)
 		}
 
 		containers, err := tutum.ListContainers()
 
 		if err != nil {
+			log("Error: Failed to retrieve the list of containers")
 			log(err)
 		}
 
@@ -145,6 +148,7 @@ func reload() {
 			auth := false
 
 			for _, container := range containers.Objects {
+				//log(container)
 				if container.State == "Running" && container.Service == link.To_service {
 
 					//Some stuff only has to be run once per container of each service
@@ -155,6 +159,7 @@ func reload() {
 						// so I am trying to re-retrieve the container individually
 						tempContainer, err := tutum.GetContainer(container.Uuid)
 						if err != nil {
+							log("Error: Failed to get the container: " + container.Uuid)
 							log(err)
 							os.Exit(5)
 						} else {
@@ -264,6 +269,9 @@ func reload() {
 }
 
 func eventHandler(event tutum.Event) {
+
+	log("Event:")
+	log(event)
 
 	notState := newVector("In progress",
 		"Pending",

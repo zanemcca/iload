@@ -155,6 +155,7 @@ func setConf(c Conf) bool {
 
 	s := b.String()
 	if safeWrite("nginx/servers.conf", s) {
+		log("Conf:")
 		log(s)
 		conf = c
 	}
@@ -196,12 +197,14 @@ func nginxReload(newConf Conf) {
 			start := exec.Command("nginx")
 			stdout, err := start.StdoutPipe()
 			if err != nil {
+				log("Warning: Failed to pipe nginx to stdout!")
 				log(err)
 			} else {
 				go pipeOutput(stdout)
 			}
 			stderr, err := start.StderrPipe()
 			if err != nil {
+				log("Warning: Failed to pipe nginx to stderr!")
 				log(err)
 			} else {
 				go pipeOutput(stderr)
